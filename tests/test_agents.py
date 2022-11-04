@@ -38,8 +38,8 @@ def test_move_forward():
 
 def test_add():
     d = Direction(Direction.U)
-    l1 = d + "right"
-    l2 = d + "left"
+    l1 = f"{d}right"
+    l2 = f"{d}left"
     assert l1.direction == Direction.R
     assert l2.direction == Direction.L
 
@@ -313,7 +313,13 @@ def test_WumpusEnvironment():
     assert not any(map(lambda x: not isinstance(x, Thing), w.things))
 
     # check that gold and wumpus are not present on (1,1)
-    assert not any(map(lambda x: isinstance(x, Gold) or isinstance(x, WumpusEnvironment), w.list_things_at((1, 1))))
+    assert not any(
+        map(
+            lambda x: isinstance(x, (Gold, WumpusEnvironment)),
+            w.list_things_at((1, 1)),
+        )
+    )
+
 
     # check if w.get_world() segments objects correctly
     assert len(w.get_world()) == 6

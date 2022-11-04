@@ -82,7 +82,7 @@ def NaiveBayesSimple(distribution):
     The input dictionary is in the following form:
         (ClassName, ClassProb): CountingProbDist
     """
-    target_dist = {c_name: prob for c_name, prob in distribution.keys()}
+    target_dist = dict(distribution.keys())
     attr_dists = {c_name: count_prob for (c_name, _), count_prob in distribution.items()}
 
     def predict(example):

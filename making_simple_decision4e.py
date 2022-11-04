@@ -78,10 +78,7 @@ class InformationGatheringAgent(Agent):
 
     def vpi_cost_ratio(self, variables):
         """Return the VPI to cost ratio for the given variables"""
-        v_by_c = []
-        for var in variables:
-            v_by_c.append(self.vpi(var) / self.cost(var))
-        return v_by_c
+        return [self.vpi(var) / self.cost(var) for var in variables]
 
     def vpi(self, variable):
         """Return VPI for a given variable"""
@@ -119,8 +116,7 @@ class MCLmap:
         pos = random.choice(self.empty)
         # 0N 1E 2S 3W
         orient = random.choice(range(4))
-        kin_state = pos + (orient,)
-        return kin_state
+        return pos + (orient,)
 
     def ray_cast(self, sensor_num, kin_state):
         """Returns distace to nearest obstacle or map boundary in the direction of sensor"""
@@ -162,7 +158,7 @@ def monte_carlo_localization(a, z, N, P_motion_sample, P_sensor, m, S=None):
         W_[i] = 1
         for j in range(M):
             z_ = ray_cast(j, S_[i], m)
-            W_[i] = W_[i] * P_sensor(z[j], z_)
+            W_[i] *= P_sensor(z[j], z_)
 
     S = weighted_sample_with_replacement(N, S_, W_)
     return S
