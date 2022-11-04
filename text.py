@@ -1,25 +1,33 @@
-"""Statistical Language Processing tools.  (Chapter 22)
+"""
+Statistical Language Processing tools (Chapter 22)
+
 We define Unigram and Ngram text models, use them to generate random text,
-and show the Viterbi algorithm for segmentatioon of letters into words.
+and show the Viterbi algorithm for segmentation of letters into words.
 Then we show a very simple Information Retrieval system, and an example
-working on a tiny sample of Unix manual pages."""
+working on a tiny sample of Unix manual pages.
+"""
 
-from utils import argmin, argmax, hashabledict
-from learning import CountingProbDist
-import search
-
-from math import log, exp
-from collections import defaultdict
 import heapq
-import re
 import os
+import re
+from collections import defaultdict
+
+import numpy as np
+
+import search
+from probabilistic_learning import CountingProbDist
+from utils import hashabledict
 
 
 class UnigramWordModel(CountingProbDist):
-
     """This is a discrete probability distribution over words, so you
     can add, sample, or get P[word], just like with CountingProbDist. You can
     also generate a random text, n words long, with P.samples(n)."""
+
+    def __init__(self, observations, default=0):
+        # Call CountingProbDist constructor,
+        # passing the observations and default parameters.
+        super(UnigramWordModel, self).__init__(observations, default)
 
     def samples(self, n):
         """Return a string of n words, random according to the model."""
@@ -27,24 +35,23 @@ class UnigramWordModel(CountingProbDist):
 
 
 class NgramWordModel(CountingProbDist):
-
     """This is a discrete probability distribution over n-tuples of words.
     You can add, sample or get P[(word1, ..., wordn)]. The method P.samples(n)
     builds up an n-word sequence; P.add_cond_prob and P.add_sequence add data."""
 
-    def __init__(self, n, observation_sequence=[], default=0):
+    def __init__(self, n, observation_sequence=None, default=0):
         # In addition to the dictionary of n-tuples, cond_prob is a
         # mapping from (w1, ..., wn-1) to P(wn | w1, ... wn-1)
         CountingProbDist.__init__(self, default=default)
         self.n = n
         self.cond_prob = defaultdict()
-        self.add_sequence(observation_sequence)
+        self.add_sequence(observation_sequence or [])
 
     # __getitem__, top, sample inherited from CountingProbDist
     # Note that they deal with tuples, not strings, as inputs
 
     def add_cond_prob(self, ngram):
-        """Builds the conditional probabilities P(wn | (w1, ..., wn-1)"""
+        """Build the conditional probabilities P(wn | (w1, ..., wn-1)"""
         if ngram[:-1] not in self.cond_prob:
             self.cond_prob[ngram[:-1]] = CountingProbDist()
         self.cond_prob[ngram[:-1]].add(ngram[-1])
@@ -68,7 +75,7 @@ class NgramWordModel(CountingProbDist):
         output = list(self.sample())
 
         for i in range(n, nwords):
-            last = output[-n+1:]
+            last = output[-n + 1:]
             next_word = self.cond_prob[tuple(last)].sample()
             output.append(next_word)
 
@@ -83,14 +90,17 @@ class NgramCharModel(NgramWordModel):
 
 
 class UnigramCharModel(NgramCharModel):
-    def __init__(self, observation_sequence=[], default=0):
+    def __init__(self, observation_sequence=None, default=0):
         CountingProbDist.__init__(self, default=default)
         self.n = 1
         self.cond_prob = defaultdict()
-        self.add_sequence(observation_sequence)
+        self.add_sequence(observation_sequence or [])
 
     def add_sequence(self, words):
-        [self.add(char) for word in words for char in list(word)]
+        for word in words:
+            for char in word:
+                self.add(char)
+
 
 # ______________________________________________________________________________
 
@@ -104,7 +114,7 @@ def viterbi_segment(text, P):
     words = [''] + list(text)
     best = [1.0] + [0.0] * n
     # Fill in the vectors best words via dynamic programming
-    for i in range(n+1):
+    for i in range(n + 1):
         for j in range(0, i):
             w = text[j:i]
             curr_score = P[w] * best[i - len(w)]
@@ -126,7 +136,6 @@ def viterbi_segment(text, P):
 
 # TODO(tmrts): Expose raw index
 class IRSystem:
-
     """A very simple Information Retrieval System, as discussed in Sect. 23.2.
     The constructor s = IRSystem('the a') builds an empty system with two
     stopwords. Next, index several documents with s.index_document(text, url).
@@ -147,8 +156,7 @@ class IRSystem:
         """Index a whole collection of files."""
         prefix = os.path.dirname(__file__)
         for filename in filenames:
-            self.index_document(open(filename).read(),
-                                os.path.relpath(filename, prefix))
+            self.index_document(open(filename).read(), os.path.relpath(filename, prefix))
 
     def index_document(self, text, url):
         """Index the text of a document."""
@@ -170,15 +178,14 @@ class IRSystem:
             return []
 
         qwords = [w for w in words(query_text) if w not in self.stopwords]
-        shortest = argmin(qwords, key=lambda w: len(self.index[w]))
+        shortest = min(qwords, key=lambda w: len(self.index[w]))
         docids = self.index[shortest]
         return heapq.nlargest(n, ((self.total_score(qwords, docid), docid) for docid in docids))
 
     def score(self, word, docid):
         """Compute a score for this word on the document with this docid."""
         # There are many options; here we take a very simple approach
-        return (log(1 + self.index[word][docid]) /
-                log(1 + self.documents[docid].nwords))
+        return np.log(1 + self.index[word][docid]) / np.log(1 + self.documents[docid].nwords)
 
     def total_score(self, words, docid):
         """Compute the sum of the scores of these words on the document with this docid."""
@@ -188,9 +195,7 @@ class IRSystem:
         """Present the results as a list."""
         for (score, docid) in results:
             doc = self.documents[docid]
-            print(
-                ("{:5.2}|{:25} | {}".format(100 * score, doc.url,
-                                            doc.title[:45].expandtabs())))
+            print("{:5.2}|{:25} | {}".format(100 * score, doc.url, doc.title[:45].expandtabs()))
 
     def present_results(self, query_text, n=10):
         """Get results for the query and present them."""
@@ -198,23 +203,20 @@ class IRSystem:
 
 
 class UnixConsultant(IRSystem):
-
     """A trivial IR system over a small collection of Unix man pages."""
 
     def __init__(self):
         IRSystem.__init__(self, stopwords="how do i the a of")
-        
+
         import os
         aima_root = os.path.dirname(__file__)
         mandir = os.path.join(aima_root, 'aima-data/MAN/')
-        man_files = [mandir + f for f in os.listdir(mandir)
-                     if f.endswith('.txt')]
+        man_files = [mandir + f for f in os.listdir(mandir) if f.endswith('.txt')]
 
         self.index_collection(man_files)
 
 
 class Document:
-
     """Metadata for a document: title and url; maybe add others later."""
 
     def __init__(self, title, url, nwords):
@@ -248,6 +250,7 @@ def canonicalize(text):
 # such as the famous rot13, which maps A to N, B to M, etc.
 
 alphabet = 'abcdefghijklmnopqrstuvwxyz'
+
 
 # Encoding
 
@@ -303,11 +306,11 @@ def bigrams(text):
     """
     return [text[i:i + 2] for i in range(len(text) - 1)]
 
+
 # Decoding a Shift (or Caesar) Cipher
 
 
 class ShiftDecoder:
-
     """There are only 26 possible encodings, so we can try all of them,
     and return the one with the highest probability, according to a
     bigram probability distribution."""
@@ -328,7 +331,7 @@ class ShiftDecoder:
     def decode(self, ciphertext):
         """Return the shift decoding of text with the best score."""
 
-        return argmax(all_shifts(ciphertext), key=lambda shift: self.score(shift))
+        return max(all_shifts(ciphertext), key=lambda shift: self.score(shift))
 
 
 def all_shifts(text):
@@ -336,11 +339,11 @@ def all_shifts(text):
 
     yield from (shift_encode(text, i) for i, _ in enumerate(alphabet))
 
+
 # Decoding a General Permutation Cipher
 
 
 class PermutationDecoder:
-
     """This is a much harder problem than the shift decoder. There are 26!
     permutations, so we can't try them all. Instead we have to search.
     We want to search well, but there are many things to consider:
@@ -363,9 +366,9 @@ class PermutationDecoder:
         """Search for a decoding of the ciphertext."""
         self.ciphertext = canonicalize(ciphertext)
         # reduce domain to speed up search
-        self.chardomain = {c for c in self.ciphertext if c is not ' '}
+        self.chardomain = {c for c in self.ciphertext if c != ' '}
         problem = PermutationDecoderProblem(decoder=self)
-        solution =  search.best_first_graph_search(
+        solution = search.best_first_graph_search(
             problem, lambda node: self.score(node.state))
 
         solution.state[' '] = ' '
@@ -383,25 +386,25 @@ class PermutationDecoder:
 
         # add small positive value to prevent computing log(0)
         # TODO: Modify the values to make score more accurate
-        logP = (sum([log(self.Pwords[word] + 1e-20) for word in words(text)]) +
-                sum([log(self.P1[c] + 1e-5) for c in text]) +
-                sum([log(self.P2[b] + 1e-10) for b in bigrams(text)]))
-        return -exp(logP)
+        logP = (sum(np.log(self.Pwords[word] + 1e-20) for word in words(text)) +
+                sum(np.log(self.P1[c] + 1e-5) for c in text) +
+                sum(np.log(self.P2[b] + 1e-10) for b in bigrams(text)))
+        return -np.exp(logP)
 
 
 class PermutationDecoderProblem(search.Problem):
 
     def __init__(self, initial=None, goal=None, decoder=None):
-        self.initial = initial or hashabledict()
+        super().__init__(initial or hashabledict(), goal)
         self.decoder = decoder
 
     def actions(self, state):
         search_list = [c for c in self.decoder.chardomain if c not in state]
         target_list = [c for c in alphabet if c not in state.values()]
-        # Find the best charater to replace
-        plainchar = argmax(search_list, key=lambda c: self.decoder.P1[c])
-        for cipherchar in target_list:
-            yield (plainchar, cipherchar)
+        # Find the best character to replace
+        plain_char = max(search_list, key=lambda c: self.decoder.P1[c])
+        for cipher_char in target_list:
+            yield (plain_char, cipher_char)
 
     def result(self, state, action):
         new_state = hashabledict(state)  # copy to prevent hash issues
