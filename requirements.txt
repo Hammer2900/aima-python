@@ -16,3 +16,4 @@ qpsolvers
 scipy
 sortedcontainers
 tensorflow
+django>=4.2.14 # not directly required, pinned by Snyk to avoid a vulnerability
