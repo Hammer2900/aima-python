@@ -75,7 +75,7 @@ class ProbDist:
         return ', '.join([('{}: ' + numfmt).format(v, p) for (v, p) in sorted(self.prob.items())])
 
     def __repr__(self):
-        return "P({})".format(self.var_name)
+        return f"P({self.var_name})"
 
 
 class JointProbDist(ProbDist):
@@ -112,7 +112,7 @@ class JointProbDist(ProbDist):
         return self.vals[var]
 
     def __repr__(self):
-        return "P({})".format(self.variables)
+        return f"P({self.variables})"
 
 
 def event_values(event, variables):
@@ -125,7 +125,7 @@ def event_values(event, variables):
     if isinstance(event, tuple) and len(event) == len(variables):
         return event
     else:
-        return tuple([event[var] for var in variables])
+        return tuple(event[var] for var in variables)
 
 
 # ______________________________________________________________________________
@@ -155,7 +155,7 @@ def enumerate_joint(variables, e, P):
     if not variables:
         return P[e]
     Y, rest = variables[0], variables[1:]
-    return sum([enumerate_joint(rest, extend(e, Y, y), P) for y in P.values(Y)])
+    return sum(enumerate_joint(rest, extend(e, Y, y), P) for y in P.values(Y))
 
 
 # ______________________________________________________________________________
@@ -190,7 +190,7 @@ class BayesNet:
         for n in self.nodes:
             if n.variable == var:
                 return n
-        raise Exception("No such variable: {}".format(var))
+        raise Exception(f"No such variable: {var}")
 
     def variable_values(self, var):
         """Return the domain of var."""
@@ -272,10 +272,7 @@ class InformationGatheringAgent(Agent):
 
     def vpi_cost_ratio(self, variables):
         """Return the VPI to cost ratio for the given variables"""
-        v_by_c = []
-        for var in variables:
-            v_by_c.append(self.vpi(var) / self.cost(var))
-        return v_by_c
+        return [self.vpi(var) / self.cost(var) for var in variables]
 
     def vpi(self, variable):
         """Return VPI for a given variable"""
@@ -543,7 +540,7 @@ def rejection_sampling(X, e, bn, N=10000):
     'False: 0.7, True: 0.3'
     """
     counts = {x: 0 for x in bn.variable_values(X)}  # bold N in [Figure 14.14]
-    for j in range(N):
+    for _ in range(N):
         sample = prior_sample(bn)  # boldface x in [Figure 14.14]
         if consistent_with(sample, e):
             counts[sample[X]] += 1
@@ -569,7 +566,7 @@ def likelihood_weighting(X, e, bn, N=10000):
     'False: 0.702, True: 0.298'
     """
     W = {x: 0 for x in bn.variable_values(X)}
-    for j in range(N):
+    for _ in range(N):
         sample, weight = weighted_sample(bn, e)  # boldface x, w in [Figure 14.15]
         W[sample[X]] += weight
     return ProbDist(X, W)
@@ -603,7 +600,7 @@ def gibbs_ask(X, e, bn, N=1000):
     state = dict(e)  # boldface x in [Figure 14.16]
     for Zi in Z:
         state[Zi] = random.choice(bn.variable_values(Zi))
-    for j in range(N):
+    for _ in range(N):
         for Zi in Z:
             state[Zi] = markov_blanket_sample(Zi, state, bn)
             counts[state[X]] += 1
@@ -637,10 +634,7 @@ class HiddenMarkovModel:
         self.prior = prior or [0.5, 0.5]
 
     def sensor_dist(self, ev):
-        if ev is True:
-            return self.sensor_model[0]
-        else:
-            return self.sensor_model[1]
+        return self.sensor_model[0] if ev is True else self.sensor_model[1]
 
 
 def forward(HMM, fv, ev):
@@ -720,7 +714,7 @@ def viterbi(HMM, ev):
 
     for i in range(t - 1, -1, -1):
         ml_probabilities[i] = m[i][i_max]
-        ml_path[i] = True if i_max == 0 else False
+        ml_path[i] = i_max == 0
         if i > 0:
             i_max = backtracking_graph[i - 1][i_max]
 
@@ -819,8 +813,7 @@ class MCLmap:
         pos = random.choice(self.empty)
         # 0N 1E 2S 3W
         orient = random.choice(range(4))
-        kin_state = pos + (orient,)
-        return kin_state
+        return pos + (orient,)
 
     def ray_cast(self, sensor_num, kin_state):
         """Returns distance to nearest obstacle or map boundary in the direction of sensor"""
@@ -864,7 +857,7 @@ def monte_carlo_localization(a, z, N, P_motion_sample, P_sensor, m, S=None):
         W_[i] = 1
         for j in range(M):
             z_ = ray_cast(j, S_[i], m)
-            W_[i] = W_[i] * P_sensor(z[j], z_)
+            W_[i] *= P_sensor(z[j], z_)
 
     S = weighted_sample_with_replacement(N, S_, W_)
     return S
